@@ -1,7 +1,7 @@
 Projet Python pour la Data Science
 
 Auteurs: Safaa , Ariël, Paul
-Sujet : 
+Sujet : Les 
 
 Les Jeux Olympiques de 2024 se sont tenus du 26 juillet au 11 août 2024 à Paris, en Seine-Saint-Denis, à Marseille et à Tahiti. Ils ont été présentés comme une réussite sportive pour la France : la délégation française y a obtenu son record de médailles depuis 1900, et l'athlète le plus titré des Jeux de Paris est le nageur français Léon Marchand (4 médailles d'or). De plus, cette édition a permis de mettre en lumière et de médiatiser des sports plus méconnus en France, comme le tennis de table grâce aux frères Lebrun.
 
