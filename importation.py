@@ -1,4 +1,3 @@
-
 import requests
 import pandas as pd
 import numpy as np
@@ -9,6 +8,7 @@ import os
 import json
 from scipy import stats
 from IPython.display import display
+import s3fs
 
 sns.set_theme(style='whitegrid')
 plt.rcParams['figure.figsize'] = (12, 6)
@@ -45,27 +45,26 @@ df = pd.DataFrame(pokemon_data)
 print('\nCollecte terminee !')
 print('Nombre de Pokemon :', len(df))
 display(df.head())
+#extrait du SSP cloud le data frame de PokeAPI
+def SSPRead(): 
+    #Initialisation File system
+    S3_ENDPOINT_URL = "https://" + os.environ["AWS_S3_ENDPOINT"]
+    fs = s3fs.S3FileSystem(client_kwargs={'endpoint_url': S3_ENDPOINT_URL})
+    BUCKET = "partigue"
+    FILE_KEY_S3 = "diffusion/PokeAPI.parquet"
+    FILE_PATH_S3 = BUCKET + "/" + FILE_KEY_S3
+    with fs.open(FILE_PATH_S3, mode="rb") as file_in:
+        df = pd.read_parquet(file_in)
+    return df
+# enregistre le data frame extrait de PokeAPI dans SSP Cloud
+def SSPWrite(df):
+    #Initialisation File system
+    S3_ENDPOINT_URL = "https://" + os.environ["AWS_S3_ENDPOINT"]
+    fs = s3fs.S3FileSystem(client_kwargs={'endpoint_url': S3_ENDPOINT_URL})
+    BUCKET_OUT = "partigue"
+    FILE_KEY_OUT_S3 = "diffusion/PokeAPI.parquet"
+    FILE_PATH_OUT_S3 = BUCKET_OUT + "/" + FILE_KEY_OUT_S3
+    with fs.open(FILE_PATH_OUT_S3, 'wb') as file_out:
+        df.to_parquet(file_out, index=False)
 
-# Dossier de destination
-CACHE_DIR = "data"
-
-# Nom du fichier
-filename = os.path.join(CACHE_DIR, "PokeAPIData.parquet")
-
-# Créer le dossier s'il n'existe pas
-os.makedirs(CACHE_DIR, exist_ok=True)
-
-# Enregistrer le DataFrame au format Parquet
-df.to_parquet(filename, index=False)
-#pour lire le fichier df = pd.read_parquet(filename)
-"""
-species= data['pokemon_species'][0]
-response = session.get(species['url'], timeout=30)
-response.raise_for_status()
-species_data = response.json()
-#print(species_data['varieties'])
-variety=species_data['varieties'][0]
-response = session.get(variety['pokemon']['url'], timeout=30)
-response.raise_for_status()
-varieties_data = response.json()
-print(varieties_data['stats'])"""
+#SSPWrite(df)
