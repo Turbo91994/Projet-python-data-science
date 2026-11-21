@@ -1,3 +1,0 @@
-L'étude pour l'instant ne tient pas compte de la rareté des cartes.
-Je pense qu'il peut être intéressant de croisé les données de pokéAPI avec une autre source comme PSA ou cardzia.
-Ce qui aura l'avantage de nous donner plus de contenu sur la partie extraction des donné
