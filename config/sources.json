@@ -1,0 +1,151 @@
+{
+  "snapshot_id": "reference_01",
+  "sources": [
+    {
+      "id": "pokemon_species",
+      "provider": "PokeAPI",
+      "filename": "pokemon_species.csv",
+      "format": "csv",
+      "purpose": "Espèces, générations d'introduction, familles évolutives et statuts légendaire/fabuleux.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_species.csv",
+      "key": [
+        "id"
+      ]
+    },
+    {
+      "id": "pokemon",
+      "provider": "PokeAPI",
+      "filename": "pokemon.csv",
+      "format": "csv",
+      "purpose": "Lien entre Pokémon et espèce, et sélection de la variété par défaut.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon.csv",
+      "key": [
+        "id"
+      ]
+    },
+    {
+      "id": "pokemon_stats",
+      "provider": "PokeAPI",
+      "filename": "pokemon_stats.csv",
+      "format": "csv",
+      "purpose": "Valeurs des statistiques de base de chaque Pokémon.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_stats.csv",
+      "key": [
+        "pokemon_id",
+        "stat_id"
+      ]
+    },
+    {
+      "id": "stats",
+      "provider": "PokeAPI",
+      "filename": "stats.csv",
+      "format": "csv",
+      "purpose": "Identification des statistiques à partir de leur identifiant.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/stats.csv",
+      "key": [
+        "id"
+      ]
+    },
+    {
+      "id": "pokemon_species_names",
+      "provider": "PokeAPI",
+      "filename": "pokemon_species_names.csv",
+      "format": "csv",
+      "purpose": "Noms des espèces dans différentes langues, notamment en français.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_species_names.csv",
+      "key": [
+        "pokemon_species_id",
+        "local_language_id"
+      ]
+    },
+    {
+      "id": "pokemon_types",
+      "provider": "PokeAPI",
+      "filename": "pokemon_types.csv",
+      "format": "csv",
+      "purpose": "Types associés à chaque Pokémon, pour contextualiser les profils.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_types.csv",
+      "key": [
+        "pokemon_id",
+        "slot"
+      ]
+    },
+    {
+      "id": "type_names",
+      "provider": "PokeAPI",
+      "filename": "type_names.csv",
+      "format": "csv",
+      "purpose": "Libellés des types dans différentes langues.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/type_names.csv",
+      "key": [
+        "type_id",
+        "local_language_id"
+      ]
+    },
+    {
+      "id": "showdown_pokedex",
+      "provider": "Pokemon Showdown",
+      "filename": "showdown_pokedex.json",
+      "format": "json",
+      "purpose": "Formes, relations évolutives, catégories particulières et vérification des statistiques.",
+      "url": "https://play.pokemonshowdown.com/data/pokedex.json"
+    },
+    {
+      "id": "pokemon_forms",
+      "provider": "PokeAPI",
+      "filename": "pokemon_forms.csv",
+      "format": "csv",
+      "purpose": "Formes explicites, variété associée, forme par défaut et indicateurs de transformation.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_forms.csv",
+      "key": [
+        "id"
+      ]
+    },
+    {
+      "id": "pokemon_abilities",
+      "provider": "PokeAPI",
+      "filename": "pokemon_abilities.csv",
+      "format": "csv",
+      "purpose": "Talents de chaque variété et emplacement du talent caché, pour vérifier les formes.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_abilities.csv",
+      "key": [
+        "pokemon_id",
+        "slot"
+      ]
+    },
+    {
+      "id": "abilities",
+      "provider": "PokeAPI",
+      "filename": "abilities.csv",
+      "format": "csv",
+      "purpose": "Libellés des talents pour comparer PokéAPI et Showdown.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/abilities.csv",
+      "key": [
+        "id"
+      ]
+    },
+    {
+      "id": "pokemon_evolution",
+      "provider": "PokeAPI",
+      "filename": "pokemon_evolution.csv",
+      "format": "csv",
+      "purpose": "Conditions d’évolution disponibles au niveau des espèces ; contrôle des cas particuliers.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_evolution.csv",
+      "key": [
+        "id"
+      ]
+    },
+    {
+      "id": "pokemon_form_types",
+      "provider": "PokeAPI",
+      "filename": "pokemon_form_types.csv",
+      "format": "csv",
+      "purpose": "Types propres à chaque forme ; vérifier notamment les formes partageant les mêmes statistiques.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_form_types.csv",
+      "key": [
+        "pokemon_form_id",
+        "slot"
+      ]
+    }
+  ]
+}
