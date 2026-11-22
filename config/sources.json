@@ -6,7 +6,7 @@
       "provider": "PokeAPI",
       "filename": "pokemon_species.csv",
       "format": "csv",
-      "purpose": "Espèces, générations d'introduction, familles évolutives et statuts légendaire/fabuleux.",
+      "purpose": "Espèces et statuts légendaire/fabuleux ; génération de l’espèce à distinguer de celle des formes.",
       "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_species.csv",
       "key": [
         "id"
@@ -17,7 +17,7 @@
       "provider": "PokeAPI",
       "filename": "pokemon.csv",
       "format": "csv",
-      "purpose": "Lien entre Pokémon et espèce, et sélection de la variété par défaut.",
+      "purpose": "Inventaire de toutes les variétés et rattachement à leur espèce.",
       "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon.csv",
       "key": [
         "id"
@@ -87,7 +87,7 @@
       "provider": "Pokemon Showdown",
       "filename": "showdown_pokedex.json",
       "format": "json",
-      "purpose": "Formes, relations évolutives, catégories particulières et vérification des statistiques.",
+      "purpose": "Vérifications après rapprochement et enrichissement Paradoxe, Ultra-Chimère et tier.",
       "url": "https://play.pokemonshowdown.com/data/pokedex.json"
     },
     {
@@ -102,40 +102,6 @@
       ]
     },
     {
-      "id": "pokemon_abilities",
-      "provider": "PokeAPI",
-      "filename": "pokemon_abilities.csv",
-      "format": "csv",
-      "purpose": "Talents de chaque variété et emplacement du talent caché, pour vérifier les formes.",
-      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_abilities.csv",
-      "key": [
-        "pokemon_id",
-        "slot"
-      ]
-    },
-    {
-      "id": "abilities",
-      "provider": "PokeAPI",
-      "filename": "abilities.csv",
-      "format": "csv",
-      "purpose": "Libellés des talents pour comparer PokéAPI et Showdown.",
-      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/abilities.csv",
-      "key": [
-        "id"
-      ]
-    },
-    {
-      "id": "pokemon_evolution",
-      "provider": "PokeAPI",
-      "filename": "pokemon_evolution.csv",
-      "format": "csv",
-      "purpose": "Conditions d’évolution disponibles au niveau des espèces ; contrôle des cas particuliers.",
-      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/pokemon_evolution.csv",
-      "key": [
-        "id"
-      ]
-    },
-    {
       "id": "pokemon_form_types",
       "provider": "PokeAPI",
       "filename": "pokemon_form_types.csv",
@@ -145,6 +111,17 @@
       "key": [
         "pokemon_form_id",
         "slot"
+      ]
+    },
+    {
+      "id": "version_groups",
+      "provider": "PokeAPI",
+      "filename": "version_groups.csv",
+      "format": "csv",
+      "purpose": "Relier les groupes de jeux des formes à leur génération pour auditer la date d’introduction des variétés.",
+      "url": "https://raw.githubusercontent.com/PokeAPI/pokeapi/193d8d4fbb57cf962e3f7c1ce5299a6fe847b3f8/data/v2/csv/version_groups.csv",
+      "key": [
+        "id"
       ]
     }
   ]
