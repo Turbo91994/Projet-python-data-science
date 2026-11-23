@@ -6,6 +6,12 @@ Auteurs : Safaa, Ariël et Paul.
 
 Nous travaillons en local avec Git. La base de référence conservera toutes les formes PokéAPI pour permettre ensuite des analyses par forme, variété, espèce ou génération. Aucun regroupement, filtre sur la forme par défaut ou retrait des Gigamax n’est appliqué à la collecte. Les talents et conditions d’évolution sont hors périmètre.
 
+## Notebook à exécuter
+
+Ouvrir **`notebook/constitution_base.ipynb`** et exécuter toutes les cellules dans l’ordre. C’est désormais le parcours de référence : chargement des sources, choix de l’unité d’observation, valeurs manquantes, comparaison CSV/API, fusion Showdown, contrôles et export. Il comprend **13 cellules de code** ; les fonctions restent dans `src/`.
+
+Les imports et chargements ne sont réalisés qu’une fois. Les trois notebooks numérotés sont conservés comme versions séparées d’origine ; leur exécution n’est plus nécessaire pour reconstruire la base.
+
 ## Structure
 
 ```text
@@ -17,9 +23,10 @@ config/sources.json                Sources CSV/Showdown et configuration API
 config/preparation.json            Correspondances de noms et justifications
 requirements.txt                   Dépendances
 notebook/
-  01_collecte.ipynb                 Deux collectes et comparaison : 5 cellules de code
-  02_exploration.ipynb              Exploration commentée des sources
-  03_preparation.ipynb              Base finale : 6 cellules de code
+  constitution_base.ipynb           Parcours unique : des sources à la base finale
+  01_collecte.ipynb                 Ancien parcours séparé de collecte
+  02_exploration.ipynb              Ancien parcours séparé d’exploration
+  03_preparation.ipynb              Ancien parcours séparé de préparation
   analyse_brouillon.ipynb           Ancienne analyse, à adapter après l’EDA
 tests/test_collect.py               Tests hors ligne de la collecte et de la comparaison
 data/raw/reference_01/              CSV bruts et JSON Showdown, avec manifeste
@@ -39,7 +46,7 @@ python -m venv .venv
 .venv\Scripts\python.exe -m jupyterlab
 ```
 
-Ouvrir `notebook/01_collecte.ipynb` et sélectionner cet environnement Python. Les cinq cellules de code permettent d’importer les fonctions, collecter par CSV, collecter par API, comparer/exporter les résultats, puis vérifier leur égalité. Après l’import, on peut aussi lancer seulement la cellule CSV ou la cellule API ; la comparaison nécessite les deux.
+Ouvrir `notebook/constitution_base.ipynb` et sélectionner cet environnement Python. Exécuter les cellules dans l’ordre : les sources brutes sont chargées au début et la comparaison avec l’API intervient après l’examen de leur structure. Avec les instantanés complets, le parcours fonctionne hors ligne ; sans cache API, le premier lancement télécharge les réponses.
 
 ### Méthode CSV
 
@@ -87,17 +94,17 @@ Le rapport est enregistré même en présence d’écarts ; la dernière cellule
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Les tests couvrent notamment la pagination, la génération propre aux formes, les statistiques de variété, l’absence d’appel lors d’un import, les erreurs HTTP, l’intégrité du cache et la détection des écarts. La vérification complète avec les données réelles est effectuée dans le notebook.
+Les tests couvrent notamment la pagination, la génération propre aux formes, les statistiques de variété, l’absence d’appel lors d’un import, les erreurs HTTP, l’intégrité du cache et la détection des écarts. La vérification complète avec les données réelles est effectuée dans `notebook/constitution_base.ipynb`, jusqu’à l’export de la base et de son audit.
 
 ## Explorer les sources
 
-Après la collecte, ouvrir `notebook/02_exploration.ipynb` et exécuter ses cellules dans l’ordre. Il charge ses propres données : aucun état du notebook 01 n’est nécessaire. Le détail du code est dans `src/exploration.py` ; le notebook présente les tableaux, les constats, les explications et les conclusions.
+Les sections 2 à 5 de `notebook/constitution_base.ipynb` explorent les sources déjà chargées. Le détail du code est dans `src/exploration.py` ; le notebook présente les observations, leurs explications et les décisions de préparation. Aucun second chargement n’est nécessaire.
 
 Le parcours examine les espèces/variétés/formes, les statistiques et dates, les types, les valeurs manquantes PokéAPI et Showdown, puis les candidats de rapprochement. Les propositions de traitement restent distinctes des décisions prises. Les tables sont des diagnostics en mémoire ; aucune source brute n’est modifiée et aucune base finale n’est exportée.
 
 ## Construire la base pour l’analyse
 
-Exécuter `notebook/03_preparation.ipynb` après la collecte. Ses six cellules de code vérifient de nouveau l’égalité des tables CSV/API, construisent la base finale avec chacune et vérifient que les deux bases finales sont identiques. `source_pokeapi` dans `config/preparation.json` choisit ensuite la version exportée : `csv` par défaut, ou `api`. Le cache complet permet cette vérification sans nouveau téléchargement.
+Les sections 7 à 9 du notebook unique utilisent les tables CSV/API déjà comparées, construisent la base finale avec chacune et vérifient que les deux bases finales sont identiques. `source_pokeapi` dans `config/preparation.json` choisit ensuite la version exportée : `csv` par défaut, ou `api`. Le cache complet permet cette vérification sans nouveau téléchargement.
 
 La fonction `prepare_database(pokeapi, showdown, source)` reçoit la table commune et les fiches Showdown. Elle n’utilise pas l’autre collecte pour combler des données. Les types Showdown sont vérifiés avec un dictionnaire d’identifiants documenté dans la configuration. Le numéro d’espèce et les six statistiques sont vérifiés après la correspondance de noms, sans servir à la choisir.
 
