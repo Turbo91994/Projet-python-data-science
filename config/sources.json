@@ -1,5 +1,11 @@
 {
   "snapshot_id": "reference_01",
+  "pokeapi_api": {
+    "base_url": "https://pokeapi.co/api/v2/",
+    "snapshot_id": "api_01",
+    "timeout_seconds": 30,
+    "pause_seconds": 0.05
+  },
   "sources": [
     {
       "id": "pokemon_species",
