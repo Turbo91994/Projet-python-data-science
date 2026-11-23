@@ -20,13 +20,13 @@ def Extraction_PokeAPI():
     os.makedirs(CACHE_DIR, exist_ok=True)
     pokemon_data = []
     session = requests.Session()
-    for generation in range(1,2):
+    for generation in range(1,10):
         print(f'Recuperation generation {generation}...')
         url=f'{BASE_URL}generation/{generation}/'
         response = session.get(url, timeout=30)
         response.raise_for_status()
         data = response.json()
-        for species in data['pokemon_species'][0:2]:
+        for species in data['pokemon_species']:
             response = session.get(species['url'], timeout=30)
             response.raise_for_status()
             species_data = response.json()
