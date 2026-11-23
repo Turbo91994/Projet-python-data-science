@@ -22,7 +22,6 @@ notebook/
   03_preparation.ipynb              Base finale : 6 cellules de code
   analyse_brouillon.ipynb           Ancienne analyse, à adapter après l’EDA
 tests/test_collect.py               Tests hors ligne de la collecte et de la comparaison
-tests/test_preparation.py           Contrôles de la fusion et de la conservation des données
 data/raw/reference_01/              CSV bruts et JSON Showdown, avec manifeste
 data/raw/api_01/                    Réponses API datées et vérifiées
 data/collected/                     Deux tables comparables et rapports régénérables
@@ -78,7 +77,7 @@ Les deux méthodes produisent les mêmes **27 colonnes** : identifiants forme/va
 - `comparaison_resume.csv` : les effectifs et le nombre de cellules différentes ;
 - `comparaison_ecarts.csv` : chaque forme absente ou valeur différente, avec les deux versions.
 
-Le rapport est enregistré même en présence d’écarts ; la dernière cellule du notebook échoue alors explicitement. Il faut comprendre ces écarts avant de choisir une source pour la fusion avec Showdown. Les tables API et CSV sont deux voies d’obtention des mêmes variables : ne pas les concaténer, ce qui doublerait les observations. L’EDA continue à examiner les CSV bruts ; la préparation utilise maintenant la table commune CSV/API.
+Le rapport est enregistré même en présence d’écarts ; la dernière cellule du notebook échoue alors explicitement. Il faut comprendre ces écarts avant de choisir une source pour la fusion avec Showdown. Les tables API et CSV sont deux voies d’obtention des mêmes variables : ne pas les concaténer, ce qui doublerait les observations. L’EDA et la préparation existantes continuent pour l’instant à lire les CSV bruts.
 
 **Résultat vérifié pour `reference_01` et `api_01` :** les deux tables contiennent 1 579 formes et 27 colonnes. Aucune forme ne manque d’un côté et aucune valeur ne diffère sur les 26 colonnes comparées par identifiant. Une nouvelle collecte doit refaire ce contrôle.
 
