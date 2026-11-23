@@ -11,11 +11,14 @@ Nous travaillons en local avec Git. La base de référence conservera toutes les
 ```text
 src/collect.py                     Fonctions de collecte, lecture et contrôle
 src/exploration.py                 Fonctions de diagnostic des sources
+src/preparation.py                 Construction de la base et audit des jointures
 config/sources.json                Adresses et description des 11 sources
+config/preparation.json            Correspondances de noms et justifications
 requirements.txt                   Dépendances
 notebook/
   01_collecte.ipynb                 Collecte courte : 4 cellules de code
   02_exploration.ipynb              Exploration commentée des sources
+  03_preparation.ipynb              Base finale : 6 cellules de code
   analyse_brouillon.ipynb           Ancienne analyse, à adapter après l’EDA
 data/raw/reference_01/              Instantané brut et manifeste de provenance
 ```
@@ -51,6 +54,16 @@ Après la collecte, ouvrir `notebook/02_exploration.ipynb` et exécuter ses cell
 
 Le parcours examine les espèces/variétés/formes, les statistiques et dates, les types, les valeurs manquantes PokéAPI et Showdown, puis les candidats de rapprochement. Les propositions de traitement restent distinctes des décisions prises. Les tables sont des diagnostics en mémoire ; aucune source brute n’est modifiée et aucune base finale n’est exportée.
 
+## Construire la base pour l’analyse
+
+Exécuter `notebook/03_preparation.ipynb`. Il vérifie les sources, construit la base, présente les contrôles et les absences, puis exporte deux fichiers dans `data/processed/reference_01/` : `pokemon_forms.csv` et `audit_preparation.csv`. Ils sont régénérables et ignorés par Git. Aucune dépendance supplémentaire n’est nécessaire.
+
+La base contient une ligne par forme, les identifiants forme/variété/espèce, le nom français de l’espèce et l’identifiant de forme, sa génération d’introduction, les six statistiques, leur somme (BST), les deux types, les catégories identifiées et le tier disponible. Les indicateurs de forme par défaut, de combat et Méga restent disponibles. Le notebook donne le dictionnaire des variables et leurs limites.
+
+Dans cet instantané, les 1 579 formes sont conservées. Les 1 518 rapprochements de formes avec Showdown présentent des statistiques et types concordants ; 61 formes restent sans correspondance retenue et sans tier. Ces absences ne suppriment aucune ligne. Les rapprochements reposent sur les noms et les références déclarées, puis les statistiques sont vérifiées indépendamment. L’audit explique les correspondances, les représentations cosmétiques communes et l’origine des types, générations, tags et tiers.
+
+Les catégories peuvent se cumuler : Koraidon et Miraidon sont légendaires et Paradoxes. Le libellé « Non étiqueté » ne garantit pas une catégorie « ordinaire ». Les statistiques sont celles de l’instantané, et les tiers ne sont pas des classements historiques à l’introduction des formes. Les moyennes par forme donneront davantage de poids aux espèces ayant plusieurs formes : cette limite devra être examinée dans l’analyse.
+
 ## Partager les mêmes données
 
 Le petit instantané brut est destiné à être versionné dans ce dépôt avec son manifeste. Après clonage de cette version, la collecte peut être relancée sans accès réseau tant que les sources de la configuration sont déjà présentes. Les 11 fichiers contiennent notamment 1 579 formes PokéAPI et 1 518 fiches Showdown dans cet instantané.
@@ -63,7 +76,7 @@ Les données préparées et les sorties régénérables sont ignorées par Git. 
 
 ## État du travail
 
-La collecte ne corrige pas les valeurs manquantes et n’applique aucune fusion entre formes. Ces choix seront documentés dans l’EDA et la préparation.
+La collecte conserve les sources, l’EDA les examine et la préparation applique les choix documentés. Aucune forme n’est supprimée ni regroupée. Les enrichissements Showdown encore non établis restent manquants.
 
 `analyse_brouillon.ipynb` conserve les premiers calculs sur 1 025 espèces, avec leurs anciennes sorties. Il utilise encore sa propre collecte API et ne doit pas être confondu avec le nouveau périmètre de toutes les formes. Ses graphiques et indicateurs pourront être repris après validation de la base.
 
