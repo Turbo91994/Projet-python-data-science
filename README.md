@@ -97,7 +97,13 @@ Le parcours examine les espèces/variétés/formes, les statistiques et dates, l
 
 ## Construire la base pour l’analyse
 
-Exécuter `notebook/03_preparation.ipynb`. Il vérifie les sources, construit la base, présente les contrôles et les absences, puis exporte deux fichiers dans `data/processed/reference_01/` : `pokemon_forms.csv` et `audit_preparation.csv`. Ils sont régénérables et ignorés par Git. Aucune dépendance supplémentaire n’est nécessaire.
+Exécuter `notebook/03_preparation.ipynb` après la collecte. Ses six cellules de code vérifient de nouveau l’égalité des tables CSV/API, construisent la base finale avec chacune et vérifient que les deux bases finales sont identiques. `source_pokeapi` dans `config/preparation.json` choisit ensuite la version exportée : `csv` par défaut, ou `api`. Le cache complet permet cette vérification sans nouveau téléchargement.
+
+La fonction `prepare_database(pokeapi, showdown, source)` reçoit la table commune et les fiches Showdown. Elle n’utilise pas l’autre collecte pour combler des données. Les types Showdown sont vérifiés avec un dictionnaire d’identifiants documenté dans la configuration. Le numéro d’espèce et les six statistiques sont vérifiés après la correspondance de noms, sans servir à la choisir.
+
+L’export produit `pokemon_forms.csv`, `audit_preparation.csv` et `provenance.json` dans `data/processed/reference_01/`. La provenance enregistre la source retenue, les instantanés et les empreintes du code, de la configuration, des manifestes et des résultats. Ces fichiers sont régénérables et ignorés par Git. Aucune dépendance supplémentaire n’est nécessaire.
+
+Une correspondance Showdown divergente ou non vérifiable bloque l’export, mais reste consultable dans l’audit en mémoire. Une forme sans correspondance est conservée avec ses enrichissements manquants. Les données PokéAPI ne sont jamais remplacées par celles de Showdown.
 
 La base contient une ligne par forme, les identifiants forme/variété/espèce, le nom français de l’espèce et l’identifiant de forme, sa génération d’introduction, les six statistiques, leur somme (BST), les deux types, les catégories identifiées et le tier disponible. Les indicateurs de forme par défaut, de combat et Méga restent disponibles. Le notebook donne le dictionnaire des variables et leurs limites.
 
