@@ -9,41 +9,85 @@ Nous travaillons en local avec Git. La base de référence conservera toutes les
 ## Structure
 
 ```text
-src/collect.py                     Fonctions de collecte, lecture et contrôle
+importation.py                     Lancement de la collecte API seule
+src/collect.py                     Collectes CSV/API, cache, contrôles et comparaison
 src/exploration.py                 Fonctions de diagnostic des sources
-config/sources.json                Adresses et description des 11 sources
+src/preparation.py                 Construction de la base et audit des jointures
+config/sources.json                Sources CSV/Showdown et configuration API
+config/preparation.json            Correspondances de noms et justifications
 requirements.txt                   Dépendances
 notebook/
-  01_collecte.ipynb                 Collecte courte : 4 cellules de code
+  01_collecte.ipynb                 Deux collectes et comparaison : 5 cellules de code
   02_exploration.ipynb              Exploration commentée des sources
+  03_preparation.ipynb              Base finale : 6 cellules de code
   analyse_brouillon.ipynb           Ancienne analyse, à adapter après l’EDA
-data/raw/reference_01/              Instantané brut et manifeste de provenance
+tests/test_collect.py               Tests hors ligne de la collecte et de la comparaison
+data/raw/reference_01/              CSV bruts et JSON Showdown, avec manifeste
+data/raw/api_01/                    Réponses API datées et vérifiées
+data/collected/                     Deux tables comparables et rapports régénérables
 ```
 
 Les CSV PokéAPI proviennent d’une même révision figée du dépôt de la source. Showdown est une copie datée ; il permettra des vérifications après rapprochement et l’ajout des catégories Paradoxe, Ultra-Chimère et du tier.
 
-## Exécuter la collecte
+## Exécuter les deux collectes
 
-L’environnement a été vérifié avec Python 3.11. Depuis la racine de ce dépôt :
+L’environnement a été vérifié avec Python 3.11. Depuis la racine du dépôt, sous Windows, ces commandes fonctionnent sans activer l’environnement :
 
-```bash
+```bat
 python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m jupyterlab
 ```
 
-Activer l’environnement : `.venv\Scripts\Activate.ps1` sous PowerShell, ou `source .venv/bin/activate` sous Linux/macOS. Puis :
+Ouvrir `notebook/01_collecte.ipynb` et sélectionner cet environnement Python. Les cinq cellules de code permettent d’importer les fonctions, collecter par CSV, collecter par API, comparer/exporter les résultats, puis vérifier leur égalité. Après l’import, on peut aussi lancer seulement la cellule CSV ou la cellule API ; la comparaison nécessite les deux.
 
-```bash
-python -m pip install -r requirements.txt
-jupyter lab
+### Méthode CSV
+
+`collect_sources()` télécharge ou vérifie les dix CSV PokéAPI et le JSON Showdown. `load_sources()` les ouvre séparément ; `check_sources(data)` vérifie leurs clés, rattachements et statistiques. Ces fonctions restent compatibles avec l’EDA et la préparation existantes.
+
+`pokeapi_from_csv(data)` assemble une table de comparaison, une ligne par forme. Les types explicites de forme sont utilisés lorsqu’ils existent, sinon ceux de la variété. Les fichiers bruts ne sont jamais réécrits.
+
+### Méthode API
+
+`collect_pokeapi_api()` parcourt toutes les pages de `/pokemon-form/`, sans limite de génération ou d’espèce et sans utiliser les identifiants des CSV. Chaque forme référence sa variété, qui fournit les statistiques et l’espèce. Le groupe de jeux de la forme donne sa génération d’introduction. Les types viennent directement de la forme. Le code ne recherche jamais les statistiques via `/pokemon/nom-de-forme`.
+
+La première exécution demande plusieurs milliers de requêtes et peut durer plusieurs minutes. Les réponses JSON complètes sont sauvegardées dans `data/raw/api_01/responses/` avec l’adresse, la date UTC et une empreinte de leur contenu. Les noms de fichiers sont les empreintes des URL, pour distinguer les ressources et les pages. Une pause entre téléchargements et une session HTTP réutilisée limitent les appels, conformément à la [documentation PokéAPI](https://pokeapi.co/docs/v2).
+
+Une erreur HTTP interrompt la collecte. Relancer reprend avec le cache déjà acquis ; aucune erreur n’est remplacée silencieusement par une autre valeur. Une fois l’instantané complet, le manifeste enregistre les fichiers attendus : une réponse supprimée ou modifiée doit être restaurée, pas remplacée silencieusement par une nouvelle version. Le cache complet peut être relu hors ligne. Les réponses d’une première collecte interrompue peuvent avoir des dates différentes ; l’API publique ne fournit pas un instantané atomique à la révision des CSV.
+
+Pour lancer seulement cette collecte en invite de commandes :
+
+```bat
+.venv\Scripts\python.exe importation.py
 ```
 
-Ouvrir `notebook/01_collecte.ipynb`, sélectionner l’environnement Python du projet et exécuter toutes les cellules dans l’ordre. VS Code peut également ouvrir le notebook avec cet environnement.
+Ce script utilise les fonctions de `src/collect.py`, affiche un aperçu et exporte `data/collected/api_01/pokeapi_api.csv`. Importer le module ne lance aucune collecte. GemRate et les fonctions S3/SSP Cloud ont été retirés ; aucune dépendance supplémentaire n’est nécessaire.
 
-Le notebook appelle trois fonctions simples :
+### Comparaison et sortie commune
 
-- `collect_sources()` vérifie les fichiers existants et télécharge seulement les nouvelles sources absentes ;
-- `load_sources()` lit les CSV et le JSON sans les fusionner ;
-- `check_sources(data)` contrôle les identifiants, les rattachements et la présence des six statistiques.
+Les deux méthodes produisent les mêmes **27 colonnes** : identifiants forme/variété/espèce, noms techniques, nom français de l’espèce, catégorie anglaise, groupe de jeux, générations de la forme et de l’espèce, six indicateurs, six statistiques et deux types (identifiants et libellés français). Le dictionnaire détaillé figure dans le notebook. Les seconds types manquants restent manquants ; les formes partageant leurs statistiques restent distinctes.
+
+`compare_pokeapi()` vérifie la population complète et les 26 valeurs associées à chaque `form_id`. L’ordre des lignes et les types Python sont harmonisés ; les valeurs ne sont pas corrigées. Un doublon de clé bloque le contrôle, une forme absente d’une source est signalée, et une absence d’un seul côté compte comme un écart. Deux valeurs manquantes au même endroit sont considérées égales.
+
+**Showdown est exclu de la comparaison.** L’égalité porte uniquement sur ces 27 colonnes PokéAPI, pas sur tous les champs des fichiers bruts. Par exemple, les habitats, ordres d’affichage et traductions non retenues ne sont pas déclarés identiques par ce contrôle. Les CSV sont figés, alors que l’API peut évoluer : une égalité est un résultat à vérifier, pas une hypothèse imposée.
+
+`export_collections()` écrit quatre fichiers dans `data/collected/reference_01_vs_api_01/` :
+
+- `pokeapi_csv.csv` et `pokeapi_api.csv` : les deux tables au même format ;
+- `comparaison_resume.csv` : les effectifs et le nombre de cellules différentes ;
+- `comparaison_ecarts.csv` : chaque forme absente ou valeur différente, avec les deux versions.
+
+Le rapport est enregistré même en présence d’écarts ; la dernière cellule du notebook échoue alors explicitement. Il faut comprendre ces écarts avant de choisir une source pour la fusion avec Showdown. Les tables API et CSV sont deux voies d’obtention des mêmes variables : ne pas les concaténer, ce qui doublerait les observations. L’EDA et la préparation existantes continuent pour l’instant à lire les CSV bruts.
+
+**Résultat vérifié pour `reference_01` et `api_01` :** les deux tables contiennent 1 579 formes et 27 colonnes. Aucune forme ne manque d’un côté et aucune valeur ne diffère sur les 26 colonnes comparées par identifiant. Une nouvelle collecte doit refaire ce contrôle.
+
+### Tester sans réseau
+
+```bat
+.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Les tests couvrent notamment la pagination, la génération propre aux formes, les statistiques de variété, l’absence d’appel lors d’un import, les erreurs HTTP, l’intégrité du cache et la détection des écarts. La vérification complète avec les données réelles est effectuée dans le notebook.
 
 ## Explorer les sources
 
@@ -51,20 +95,30 @@ Après la collecte, ouvrir `notebook/02_exploration.ipynb` et exécuter ses cell
 
 Le parcours examine les espèces/variétés/formes, les statistiques et dates, les types, les valeurs manquantes PokéAPI et Showdown, puis les candidats de rapprochement. Les propositions de traitement restent distinctes des décisions prises. Les tables sont des diagnostics en mémoire ; aucune source brute n’est modifiée et aucune base finale n’est exportée.
 
+## Construire la base pour l’analyse
+
+Exécuter `notebook/03_preparation.ipynb`. Il vérifie les sources, construit la base, présente les contrôles et les absences, puis exporte deux fichiers dans `data/processed/reference_01/` : `pokemon_forms.csv` et `audit_preparation.csv`. Ils sont régénérables et ignorés par Git. Aucune dépendance supplémentaire n’est nécessaire.
+
+La base contient une ligne par forme, les identifiants forme/variété/espèce, le nom français de l’espèce et l’identifiant de forme, sa génération d’introduction, les six statistiques, leur somme (BST), les deux types, les catégories identifiées et le tier disponible. Les indicateurs de forme par défaut, de combat et Méga restent disponibles. Le notebook donne le dictionnaire des variables et leurs limites.
+
+Dans cet instantané, les 1 579 formes sont conservées. Les 1 518 rapprochements de formes avec Showdown présentent des statistiques et types concordants ; 61 formes restent sans correspondance retenue et sans tier. Ces absences ne suppriment aucune ligne. Les rapprochements reposent sur les noms et les références déclarées, puis les statistiques sont vérifiées indépendamment. L’audit explique les correspondances, les représentations cosmétiques communes et l’origine des types, générations, tags et tiers.
+
+Les catégories peuvent se cumuler : Koraidon et Miraidon sont légendaires et Paradoxes. Le libellé « Non étiqueté » ne garantit pas une catégorie « ordinaire ». Les statistiques sont celles de l’instantané, et les tiers ne sont pas des classements historiques à l’introduction des formes. Les moyennes par forme donneront davantage de poids aux espèces ayant plusieurs formes : cette limite devra être examinée dans l’analyse.
+
 ## Partager les mêmes données
 
 Le petit instantané brut est destiné à être versionné dans ce dépôt avec son manifeste. Après clonage de cette version, la collecte peut être relancée sans accès réseau tant que les sources de la configuration sont déjà présentes. Les 11 fichiers contiennent notamment 1 579 formes PokéAPI et 1 518 fiches Showdown dans cet instantané.
 
 Le manifeste contient l’adresse, la date de récupération et l’empreinte SHA-256 de chaque fichier. Une modification accidentelle arrête la collecte. Si un fichier de cet instantané a été supprimé, le restaurer depuis Git : ne pas le remplacer silencieusement par une nouvelle version de Showdown.
 
-Pour une collecte volontairement actualisée, choisir un nouveau `snapshot_id` dans la configuration. Si les CSV PokéAPI sont actualisés, leurs adresses doivent pointer vers une même nouvelle révision. Le premier téléchargement nécessite Internet. Les fichiers d’un instantané existant ne sont jamais écrasés automatiquement.
+Pour actualiser les CSV/Showdown, choisir un nouveau `snapshot_id` principal dans la configuration. Pour actualiser l’API, choisir un nouveau `pokeapi_api.snapshot_id` (par exemple `api_02`). Ne pas réutiliser un instantané API partiellement effacé. Si les CSV PokéAPI sont actualisés, leurs adresses doivent pointer vers une même nouvelle révision. Le premier téléchargement nécessite Internet. Les fichiers d’un instantané existant ne sont jamais écrasés automatiquement.
 
-Les données préparées et les sorties régénérables sont ignorées par Git. Aucun compte SSP Cloud, accès S3 ou secret n’est nécessaire.
+Le dossier `data/` figure dans `.gitignore` : les nouvelles réponses API et sorties régénérables ne sont pas ajoutées à Git. Les fichiers bruts déjà suivis restent suivis ; une règle d’exclusion ne les retire pas de l’historique. Aucun compte SSP Cloud, accès S3 ou secret n’est nécessaire.
 
 ## État du travail
 
-La collecte ne corrige pas les valeurs manquantes et n’applique aucune fusion entre formes. Ces choix seront documentés dans l’EDA et la préparation.
+La collecte conserve les sources, l’EDA les examine et la préparation applique les choix documentés. Aucune forme n’est supprimée ni regroupée. Les enrichissements Showdown encore non établis restent manquants.
 
 `analyse_brouillon.ipynb` conserve les premiers calculs sur 1 025 espèces, avec leurs anciennes sorties. Il utilise encore sa propre collecte API et ne doit pas être confondu avec le nouveau périmètre de toutes les formes. Ses graphiques et indicateurs pourront être repris après validation de la base.
 
-Les dépendances de ce brouillon sont incluses dans `requirements.txt`. Les anciens scripts de collecte, de lecture S3 et leur ébauche GemRate ont été remplacés par `src/collect.py` ; leur historique reste accessible dans Git.
+Les dépendances de ce brouillon sont incluses dans `requirements.txt`. `importation.py` est désormais un point d’entrée court vers `src/collect.py` ; les anciens traitements S3 et GemRate ne font plus partie de la collecte.
