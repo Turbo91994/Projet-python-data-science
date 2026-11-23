@@ -15,6 +15,7 @@ tempCodeRunnerFile.py
 pokeapi_cache/
 data/
 outputs/
+tests/
 
 infos/
 tmp/
