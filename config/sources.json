@@ -1,5 +1,9 @@
 {
   "snapshot_id": "reference_01",
+  "s3_backup": {
+    "enabled": true,
+    "path": "arielhermas/PROJET PYTHON FOR DS/data/raw"
+  },
   "pokeapi_api": {
     "base_url": "https://pokeapi.co/api/v2/",
     "snapshot_id": "api_01",

@@ -8,8 +8,11 @@ import time
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from src.exploration import explore_forms, STAT_COLUMNS
+from src.s3_backup import open_backup, read_remote_manifest, restore_file, save_missing_files
 
 
 # collect.py est dans src/ ; la configuration et les données restent à la racine.
@@ -22,8 +25,28 @@ def read_config():
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+# Codes que le serveur renvoie en cas de panne passagère (522 = délai de connexion dépassé).
+RETRY_STATUS = [500, 502, 503, 504, 520, 521, 522, 523, 524]
+
+
+def download_source(url):
+    """Télécharger une source en réessayant quelques fois après une panne passagère."""
+    retry = Retry(total=3, backoff_factor=2, status_forcelist=RETRY_STATUS, allowed_methods=["GET"])
+    with requests.Session() as session:
+        session.mount("https://", HTTPAdapter(max_retries=retry))
+        session.mount("http://", HTTPAdapter(max_retries=retry))
+        response = session.get(url, timeout=30)
+        response.raise_for_status()
+    assert response.content, f"Fichier téléchargé vide : {url}."
+    return response.content
+
+
 def collect_sources():
-    """Télécharger les fichiers absents ; vérifier et conserver ceux déjà présents."""
+    """Télécharger les fichiers absents ; vérifier et conserver ceux déjà présents.
+
+    Si le site est en panne (erreur 522, par exemple) ou si la copie locale a disparu,
+    la source est restaurée depuis la copie de secours S3, après vérification de son empreinte.
+    """
     config = read_config()
     folder = PROJECT_DIR / "data" / "raw" / config["snapshot_id"]
     folder.mkdir(parents=True, exist_ok=True)
@@ -33,6 +56,9 @@ def collect_sources():
     else:
         manifest = {"snapshot_id": config["snapshot_id"], "files": {}}
     assert manifest["snapshot_id"] == config["snapshot_id"], "Instantané incohérent."
+
+    backup = open_backup(config, config["snapshot_id"])
+    remote_manifest = read_remote_manifest(backup) if backup else None
 
     for source in config["sources"]:
         path = folder / source["filename"]
@@ -46,22 +72,44 @@ def collect_sources():
             assert fingerprint == saved["sha256"], f"Fichier modifié : {path.name}. Restaurer la copie d'origine."
             print("Conservé et vérifié :", path.name)
         else:
+            saved = manifest["files"].get(source_id)
+            content = None
             # Ne pas remplacer une copie datée perdue par une nouvelle version de l'API.
-            assert source_id not in manifest["files"], f"Fichier manquant : {path.name}. Restaurer l'instantané depuis Git."
-            response = requests.get(source["url"], timeout=30)
-            response.raise_for_status()
-            content = response.content
-            assert content, f"Fichier téléchargé vide : {path.name}."
+            if saved is None:
+                try:
+                    content = download_source(source["url"])
+                    saved = {
+                        "filename": path.name,
+                        "download_url": source["url"],
+                        "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
+                        "size_bytes": len(content),
+                        "sha256": hashlib.sha256(content).hexdigest(),
+                    }
+                    print("Téléchargé :", path.name)
+                except requests.RequestException as error:
+                    print(f"Téléchargement impossible : {path.name} ({error}).")
+            if content is None:
+                restored = restore_file(backup, remote_manifest, source) if backup else None
+                assert restored is not None, (
+                    f"Fichier indisponible : {path.name}. Réessayer plus tard, restaurer l'instantané "
+                    "depuis Git ou activer la copie de secours S3 (config/sources.json).")
+                content, remote_entry = restored
+                if saved is not None:
+                    assert remote_entry["sha256"] == saved["sha256"], f"Copie S3 différente de la provenance locale : {path.name}."
+                else:
+                    saved = {**remote_entry, "restored_from": "s3"}
+                print("Restauré depuis S3 :", path.name)
             path.write_bytes(content)
-            manifest["files"][source_id] = {
-                "filename": path.name,
-                "download_url": source["url"],
-                "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
-                "size_bytes": len(content),
-                "sha256": hashlib.sha256(content).hexdigest(),
-            }
+            manifest["files"][source_id] = saved
             manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            print("Téléchargé :", path.name)
+
+    if backup:
+        # La copie de secours ne doit jamais bloquer la collecte.
+        try:
+            sent = save_missing_files(backup, folder, manifest, remote_manifest, config["sources"])
+            print(f"Copie de secours S3 : {sent} fichier(s) ajouté(s).")
+        except Exception as error:
+            print(f"Copie de secours S3 non mise à jour ({type(error).__name__} : {error}).")
     return folder
 
 
