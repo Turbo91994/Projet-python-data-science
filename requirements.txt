@@ -7,3 +7,4 @@ seaborn
 scipy
 jupyterlab
 ipykernel
+s3fs
