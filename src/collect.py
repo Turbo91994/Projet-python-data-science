@@ -2,14 +2,13 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+import concurrent.futures
 import hashlib
 import json
 import time
 
 import pandas as pd
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from src.exploration import explore_forms, STAT_COLUMNS
 from src.s3_backup import open_backup, read_remote_manifest, restore_file, save_missing_files
@@ -29,16 +28,41 @@ def read_config():
 RETRY_STATUS = [500, 502, 503, 504, 520, 521, 522, 523, 524]
 
 
-def download_source(url):
-    """Télécharger une source en réessayant quelques fois après une panne passagère."""
-    retry = Retry(total=3, backoff_factor=2, status_forcelist=RETRY_STATUS, allowed_methods=["GET"])
-    with requests.Session() as session:
-        session.mount("https://", HTTPAdapter(max_retries=retry))
-        session.mount("http://", HTTPAdapter(max_retries=retry))
-        response = session.get(url, timeout=30)
-        response.raise_for_status()
-    assert response.content, f"Fichier téléchargé vide : {url}."
+def fetch_once(url):
+    """Une seule requête GET."""
+    response = requests.get(url, timeout=(5, 15))
+    response.raise_for_status()
     return response.content
+
+
+def download_source(url, attempts=3, deadline=20):
+    """Télécharger une source : au plus `attempts` tentatives, chacune coupée après `deadline` secondes.
+
+    Le délai de `requests` ne limite pas la durée totale (DNS, réponse qui goutte à goutte) ;
+    la requête est donc lancée dans un fil et abandonnée si elle dépasse `deadline`.
+    """
+    name = url.rstrip("/").split("/")[-1]
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            content = pool.submit(fetch_once, url).result(timeout=deadline)
+            assert content, f"Fichier téléchargé vide : {url}."
+            return content
+        except concurrent.futures.TimeoutError:
+            last_error = requests.Timeout(f"aucune réponse après {deadline} s")
+        except requests.HTTPError as error:
+            last_error = error
+            if error.response.status_code not in RETRY_STATUS:
+                break  # inutile de réessayer une erreur 404, par exemple
+        except requests.RequestException as error:
+            last_error = error
+        finally:
+            pool.shutdown(wait=False)
+        print(f"  Tentative {attempt}/{attempts} échouée pour {name} : {last_error}", flush=True)
+        if attempt < attempts:
+            time.sleep(2)
+    raise last_error
 
 
 def collect_sources():

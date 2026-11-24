@@ -10,20 +10,25 @@ def open_backup(config, snapshot_id):
     settings = config.get("s3_backup", {})
     path = os.environ.get("S3_BACKUP_PATH") or settings.get("path")
     if not settings.get("enabled", False) or not path:
+        print("Copie de secours S3 désactivée : bloc 's3_backup' absent, 'enabled' faux ou 'path' vide dans config/sources.json.")
         return None
     try:
         import s3fs
 
         # Sur le SSP Cloud, les identifiants sont déjà dans les variables AWS_*.
-        endpoint = os.environ["AWS_S3_ENDPOINT"]
+        endpoint = os.environ.get("AWS_S3_ENDPOINT", "minio.lab.sspcloud.fr")
         if not endpoint.startswith("http"):
             endpoint = "https://" + endpoint
-        fs = s3fs.S3FileSystem(client_kwargs={"endpoint_url": endpoint})
-        fs.exists(path)  # échoue tout de suite si les identifiants ont expiré
+        # Sans identifiants, lecture anonyme : suffisant pour un dossier rendu public.
+        anonymous = not os.environ.get("AWS_ACCESS_KEY_ID")
+        fs = s3fs.S3FileSystem(anon=anonymous, client_kwargs={"endpoint_url": endpoint})
+        folder = path.strip("/") + "/" + snapshot_id
+        # Lire un fichier ne demande pas le droit de lister le dossier (refusé aux autres utilisateurs).
+        fs.exists(folder + "/manifest.json")  # échoue tout de suite si les identifiants ont expiré
     except Exception as error:
         print(f"Copie de secours S3 indisponible ({type(error).__name__} : {error}).")
         return None
-    return fs, path.strip("/") + "/" + snapshot_id
+    return fs, folder
 
 
 def read_remote_manifest(backup):
@@ -41,6 +46,7 @@ def restore_file(backup, remote_manifest, source):
     entry = remote_manifest["files"].get(source["id"])
     path = folder + "/" + source["filename"]
     if entry is None or not fs.exists(path):
+        print(f"Copie S3 introuvable : {path} (entrée au manifeste : {entry is not None}).")
         return None
     assert entry["download_url"] == source["url"], "Adresse modifiée : créer un nouvel instantané."
     content = fs.cat_file(path)
