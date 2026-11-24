@@ -1,9 +1,9 @@
 # Environnement vérifié avec Python 3.11.
-pandas==3.0.3
-numpy==1.26.4
-requests==2.32.3
-matplotlib==3.11.0
-seaborn==0.13.2
-scipy==1.17.1
-jupyterlab==4.6.1
-ipykernel==7.3.0
+pandas
+numpy
+requests
+matplotlib
+seaborn
+scipy
+jupyterlab
+ipykernel
