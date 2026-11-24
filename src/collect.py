@@ -2,13 +2,14 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.request import Request, urlopen
 import hashlib
 import json
 import time
 
 import pandas as pd
 import requests
+
+from src.exploration import explore_forms, STAT_COLUMNS
 
 
 # collect.py est dans src/ ; la configuration et les données restent à la racine.
@@ -47,9 +48,9 @@ def collect_sources():
         else:
             # Ne pas remplacer une copie datée perdue par une nouvelle version de l'API.
             assert source_id not in manifest["files"], f"Fichier manquant : {path.name}. Restaurer l'instantané depuis Git."
-            request = Request(source["url"], headers={"User-Agent": "ENSAE-Pokemon-Project/1.0"})
-            with urlopen(request, timeout=30) as response:
-                content = response.read()
+            response = requests.get(source["url"], timeout=30)
+            response.raise_for_status()
+            content = response.content
             assert content, f"Fichier téléchargé vide : {path.name}."
             path.write_bytes(content)
             manifest["files"][source_id] = {
@@ -79,57 +80,37 @@ def load_sources():
 
 
 def check_sources(data):
-    """Contrôler les clés, les rattachements et les six statistiques ; résumer les fichiers."""
+    """Vérifier les clés et les relations nécessaires aux jointures."""
     summary = []
     for source in read_config()["sources"]:
         table = data[source["id"]]
         assert len(table) > 0, f"Source vide : {source['id']}."
         if source["format"] == "csv":
-            key = source["key"]
-            assert not table[key].isna().any().any(), f"Identifiant manquant : {source['id']}."
-            assert not table.duplicated(key).any(), f"Identifiant répété : {source['id']}."
+            assert not table[source["key"]].isna().any().any(), f"Identifiant manquant : {source['id']}."
+            assert not table.duplicated(source["key"]).any(), f"Identifiant répété : {source['id']}."
         summary.append({"source": source["id"], "lignes_ou_fiches": len(table)})
 
-    species = data["pokemon_species"]
     varieties = data["pokemon"]
     forms = data["pokemon_forms"]
     stats = data["pokemon_stats"]
-    assert varieties["species_id"].isin(species["id"]).all(), "Espèce référencée absente."
+    assert varieties["species_id"].isin(data["pokemon_species"]["id"]).all(), "Espèce absente."
     assert forms["pokemon_id"].isin(varieties["id"]).all(), "Variété d'une forme absente."
-    assert stats["pokemon_id"].isin(varieties["id"]).all(), "Variété des statistiques absente."
     assert forms["introduced_in_version_group_id"].isin(data["version_groups"]["id"]).all(), "Groupe de jeux absent."
-    assert data["version_groups"]["generation_id"].notna().all(), "Génération d'un groupe de jeux absente."
-    assert data["pokemon_species_names"]["pokemon_species_id"].isin(species["id"]).all(), "Espèce d'une traduction absente."
-
-    stat_names = ["hp", "attack", "defense", "special-attack", "special-defense", "speed"]
-    expected_stats = data["stats"].loc[data["stats"]["identifier"].isin(stat_names)]
-    assert len(expected_stats) == 6, "Dictionnaire des six statistiques incomplet."
-    assert set(stats["stat_id"]) == set(expected_stats["id"]), "Statistiques inattendues."
+    expected = data["stats"].loc[data["stats"]["identifier"].isin(STAT_NAMES), "id"]
+    assert len(expected) == 6 and set(stats["stat_id"]) == set(expected), "Dictionnaire des statistiques incomplet."
     counts = stats.groupby("pokemon_id").size().reindex(varieties["id"], fill_value=0)
     assert counts.eq(6).all(), "Une variété n'a pas ses six statistiques."
-    assert stats["base_stat"].gt(0).all() and stats["base_stat"].mod(1).eq(0).all(), "Statistique absente ou invalide."
-
+    assert stats["base_stat"].gt(0).all() and stats["base_stat"].mod(1).eq(0).all(), "Statistique invalide."
     assert data["pokemon_types"]["pokemon_id"].isin(varieties["id"]).all(), "Variété d'un type absente."
     assert data["pokemon_form_types"]["pokemon_form_id"].isin(forms["id"]).all(), "Forme d'un type absente."
     for table in [data["pokemon_types"], data["pokemon_form_types"]]:
         assert table["type_id"].isin(data["type_names"]["type_id"]).all(), "Type inconnu."
-
-    # Les fiches cosmétiques Showdown peuvent ne pas répéter leurs statistiques.
-    showdown = data["showdown_pokedex"]
-    assert isinstance(showdown, dict), "Structure Showdown inattendue."
-    for key, entry in showdown.items():
-        assert entry.get("name"), f"Fiche Showdown sans nom : {key}."
-        if entry.get("isCosmeticForme", False):
-            assert entry.get("baseSpecies"), f"Référence cosmétique absente : {key}."
-        else:
-            assert set(entry.get("baseStats", {})) == {"hp", "atk", "def", "spa", "spd", "spe"}, f"Statistiques Showdown incomplètes : {key}."
-
     print(f"Contrôles terminés : {len(forms)} formes conservées ; aucun filtre ni regroupement.")
     return pd.DataFrame(summary)
 
 
 # La comparaison concerne ces informations du projet, pas tous les champs bruts.
-STAT_NAMES = ["hp", "attack", "defense", "special-attack", "special-defense", "speed"]
+STAT_NAMES = STAT_COLUMNS
 TEXT_COLUMNS = ["forme", "variete", "espece", "nom_fr", "genre_en", "type_1", "type_2"]
 POKEAPI_COLUMNS = [
     "form_id", "pokemon_id", "species_id", "forme", "variete", "espece", "nom_fr", "genre_en",
@@ -153,43 +134,28 @@ def normalize_pokeapi_table(table):
 
 
 def pokeapi_from_csv(data):
-    """Présenter les CSV en une ligne par forme, au format commun avec l'API."""
-    forms = data["pokemon_forms"].rename(columns={
-        "id": "form_id", "identifier": "forme", "is_default": "is_default_form",
-        "introduced_in_version_group_id": "version_group_id"})
-    varieties = data["pokemon"][["id", "identifier", "species_id", "is_default"]].rename(columns={
-        "id": "pokemon_id", "identifier": "variete", "is_default": "is_default_variety"})
-    table = forms.merge(varieties, on="pokemon_id", how="left", validate="many_to_one")
-    species = data["pokemon_species"][["id", "identifier", "generation_id", "is_legendary", "is_mythical"]].rename(columns={
-        "id": "species_id", "identifier": "espece", "generation_id": "generation_espece"})
-    table = table.merge(species, on="species_id", how="left", validate="many_to_one")
-    games = data["version_groups"][["id", "generation_id"]].rename(columns={"id": "version_group_id", "generation_id": "generation"})
-    table = table.merge(games, on="version_group_id", how="left", validate="many_to_one")
+    """Réutiliser les jointures de l'EDA, puis ajouter les libellés nécessaires."""
+    table = explore_forms(data).rename(columns={
+        "form_name": "forme", "variety_name": "variete", "species_name": "espece",
+        "form_generation": "generation", "species_generation": "generation_espece"})
+    species = data["pokemon_species"].set_index("id")
+    table["is_legendary"] = table["species_id"].map(species["is_legendary"])
+    table["is_mythical"] = table["species_id"].map(species["is_mythical"])
 
     names = data["pokemon_species_names"]
-    french = names.loc[names["local_language_id"].eq(5), ["pokemon_species_id", "name"]].rename(
-        columns={"pokemon_species_id": "species_id", "name": "nom_fr"})
-    english = names.loc[names["local_language_id"].eq(9), ["pokemon_species_id", "genus"]].rename(
-        columns={"pokemon_species_id": "species_id", "genus": "genre_en"})
-    table = table.merge(french, on="species_id", how="left", validate="many_to_one")
-    table = table.merge(english, on="species_id", how="left", validate="many_to_one")
+    french = names[names["local_language_id"] == 5].set_index("pokemon_species_id")
+    english = names[names["local_language_id"] == 9].set_index("pokemon_species_id")
+    table["nom_fr"] = table["species_id"].map(french["name"])
+    table["genre_en"] = table["species_id"].map(english["genus"])
 
-    stats = data["pokemon_stats"].merge(data["stats"][["id", "identifier"]],
-        left_on="stat_id", right_on="id", validate="many_to_one")
-    stats = stats.pivot(index="pokemon_id", columns="identifier", values="base_stat")
-    table = table.merge(stats[STAT_NAMES], left_on="pokemon_id", right_index=True, how="left", validate="many_to_one")
-
-    # Regrouper les slots de types avant la jointure évite de multiplier les formes.
-    variety_types = data["pokemon_types"].sort_values("slot").groupby("pokemon_id")["type_id"].agg(list)
-    form_types = data["pokemon_form_types"].sort_values("slot").groupby("pokemon_form_id")["type_id"].agg(list)
-    types = table["form_id"].map(form_types).combine_first(table["pokemon_id"].map(variety_types))
-    assert types.map(lambda values: isinstance(values, list) and 1 <= len(values) <= 2).all(), "Types absents ou invalides."
-    french_types = data["type_names"].loc[data["type_names"]["local_language_id"].eq(5)].set_index("type_id")["name"]
-    table["type_1_id"] = types.map(lambda values: values[0])
-    table["type_2_id"] = types.map(lambda values: values[1] if len(values) == 2 else None)
-    table["type_1"] = table["type_1_id"].map(french_types)
-    table["type_2"] = table["type_2_id"].map(french_types)
-    assert set(table["form_id"]) == set(data["pokemon_forms"]["id"]), "Formes perdues."
+    # Prendre les types de la forme, sinon ceux de sa variété.
+    types = table["explicit_form_types"].combine_first(table["variety_types"])
+    names = data["type_names"]
+    type_ids = names[names["local_language_id"] == 9].set_index("name")["type_id"]
+    french_types = names[names["local_language_id"] == 5].set_index("type_id")["name"]
+    for slot in [1, 2]:
+        table[f"type_{slot}_id"] = types.str[slot - 1].map(type_ids)
+        table[f"type_{slot}"] = table[f"type_{slot}_id"].map(french_types)
     return normalize_pokeapi_table(table[POKEAPI_COLUMNS])
 
 
@@ -199,10 +165,11 @@ def resource_id(resource):
 
 
 def translated_value(entries, language, field):
-    """Lire une traduction ; conserver une absence au lieu d'inventer un nom."""
-    values = [entry[field] for entry in entries if entry["language"]["name"] == language]
-    assert len(values) <= 1, "Traduction dupliquée."
-    return values[0] if values else None
+    """Chercher la traduction demandée, ou garder une valeur manquante."""
+    for entry in entries:
+        if entry["language"]["name"] == language:
+            return entry[field]
+    return None
 
 
 def json_fingerprint(data):

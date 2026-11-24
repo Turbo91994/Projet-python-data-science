@@ -97,7 +97,6 @@ def missing_pokeapi_context(data):
     """Chercher les répartitions qui aident à interpréter les absences PokéAPI."""
     species = data["pokemon_species"]
     varieties = data["pokemon"]
-    forms = data["pokemon_forms"]
     names = data["pokemon_species_names"]
     habitat = species.assign(absent=species["habitat_id"].isna()).groupby("generation_id").agg(
         especes=("id", "size"), habitats_absents=("absent", "sum"))
@@ -106,13 +105,8 @@ def missing_pokeapi_context(data):
         varietes=("id", "size"), experiences_absentes=("experience_absente", "sum"), ordres_absents=("ordre_absent", "sum"))
     translations = names.assign(nom_absent=names["name"].isna(), description_absente=names["genus"].isna()).groupby("local_language_id").agg(
         lignes=("pokemon_species_id", "size"), noms_absents=("nom_absent", "sum"), descriptions_absentes=("description_absente", "sum"))
-    short_names = forms.loc[forms["form_identifier"].isna()]
-    labels = pd.Series({
-        "Noms courts de forme absents": len(short_names),
-        "Dont identifiants complets disponibles": int(short_names["identifier"].notna().sum()),
-        "Dont formes marquées par défaut": int(short_names["is_default"].eq(1).sum()),
-    }, name="nombre").to_frame()
-    return {"habitat": habitat, "varieties": variety_missing, "translations": translations, "labels": labels}
+    return {"habitat": habitat, "varieties": variety_missing, "translations": translations}
+
 
 
 def missing_showdown(showdown):
@@ -134,47 +128,42 @@ def missing_showdown(showdown):
 
 
 def inspect_showdown_references(showdown):
-    """Examiner les références des fiches incomplètes, sans hériter ni imputer leurs valeurs."""
-    by_name = {}
-    for entry in showdown.values():
-        assert entry["name"] not in by_name, "Nom Showdown ambigu."
-        by_name[entry["name"]] = entry
-    core_fields = ["num", "baseStats", "types", "heightm", "weightkg"]
-    cosmetic_rows = []
+    """Compter les références utiles et afficher les désaccords de tier."""
+    by_name = {entry["name"]: entry for entry in showdown.values()}
+    assert len(by_name) == len(showdown), "Nom Showdown ambigu."
+    fields = ["num", "baseStats", "types", "heightm", "weightkg"]
+    missing_core = cosmetic = complete_parent = missing_tags = parent_tags = 0
     tier_rows = []
-    missing_tags = tags_in_parent = 0
     for key, entry in showdown.items():
         parent = by_name.get(entry.get("baseSpecies"), {})
-        if any(field not in entry for field in core_fields):
-            cosmetic_rows.append({"cle": key, "baseSpecies": entry.get("baseSpecies"),
-                "cosmetique": entry.get("isCosmeticForme", False),
-                "champs_absents": [field for field in core_fields if field not in entry],
-                "reference_complete": all(field in parent and parent[field] is not None for field in core_fields)})
+        if any(field not in entry for field in fields):
+            missing_core += 1
+            cosmetic += bool(entry.get("isCosmeticForme"))
+            complete_parent += all(parent.get(field) is not None for field in fields)
         if "tier" not in entry:
-            battle_name = entry.get("battleOnly")
-            battle_parent = by_name.get(battle_name, {}) if isinstance(battle_name, str) else {}
-            tier_rows.append({"cle": key, "baseSpecies": entry.get("baseSpecies"), "battleOnly": battle_name,
-                              "tier_base": parent.get("tier"), "tier_combat": battle_parent.get("tier")})
+            battle = entry.get("battleOnly")
+            battle_parent = by_name.get(battle, {}) if isinstance(battle, str) else {}
+            tier_rows.append({"cle": key, "baseSpecies": entry.get("baseSpecies"),
+                "battleOnly": battle, "tier_base": parent.get("tier"),
+                "tier_combat": battle_parent.get("tier")})
         if "tags" not in entry:
             missing_tags += 1
-            if parent.get("tags"):
-                tags_in_parent += 1
-    cosmetics = pd.DataFrame(cosmetic_rows, columns=["cle", "baseSpecies", "cosmetique", "champs_absents", "reference_complete"])
+            parent_tags += bool(parent.get("tags"))
     tiers = pd.DataFrame(tier_rows, columns=["cle", "baseSpecies", "battleOnly", "tier_base", "tier_combat"])
-    conflicts = tiers.loc[tiers["tier_combat"].notna() & tiers["tier_combat"].ne(tiers["tier_base"])]
+    conflicts = tiers[tiers["tier_combat"].notna() & tiers["tier_combat"].ne(tiers["tier_base"])]
     summary = pd.Series({
-        "Fiches avec un champ commun absent": len(cosmetics),
-        "Dont explicitement cosmétiques": int(cosmetics["cosmetique"].sum()),
-        "Dont référence contenant les cinq champs": int(cosmetics["reference_complete"].sum()),
+        "Fiches avec un champ commun absent": missing_core,
+        "Dont explicitement cosmétiques": cosmetic,
+        "Dont référence contenant les cinq champs": complete_parent,
         "Fiches sans tier explicite": len(tiers),
-        "Dont tier disponible dans baseSpecies": int(tiers["tier_base"].notna().sum()),
+        "Dont tier disponible dans baseSpecies": tiers["tier_base"].notna().sum(),
         "Désaccords entre références de tier": len(conflicts),
         "Fiches sans champ tags": missing_tags,
-        "Dont référence contenant des tags": tags_in_parent,
-        "Fiches étiquetées Paradox": sum("Paradox" in entry.get("tags", []) for entry in showdown.values()),
-        "Fiches étiquetées Ultra Beast": sum("Ultra Beast" in entry.get("tags", []) for entry in showdown.values()),
+        "Dont référence contenant des tags": parent_tags,
+        "Fiches étiquetées Paradox": sum("Paradox" in e.get("tags", []) for e in showdown.values()),
+        "Fiches étiquetées Ultra Beast": sum("Ultra Beast" in e.get("tags", []) for e in showdown.values()),
     }, name="nombre").to_frame()
-    return {"summary": summary, "cosmetics": cosmetics, "tiers": tiers, "tier_conflicts": conflicts}
+    return {"summary": summary, "tier_conflicts": conflicts}
 
 
 def inspect_showdown_candidates(forms, showdown):
@@ -201,4 +190,4 @@ def inspect_showdown_candidates(forms, showdown):
         "Formes avec un candidat numérique": int(report["numeric_candidates"].eq(1).sum()),
         "Formes avec plusieurs candidats numériques": int(report["numeric_candidates"].gt(1).sum()),
     }, name="nombre").to_frame()
-    return {"summary": summary, "forms": report, "candidates": candidates}
+    return {"summary": summary, "candidates": candidates}

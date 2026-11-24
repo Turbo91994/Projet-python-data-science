@@ -1,7 +1,6 @@
 """Construire une ligne par forme et conserver la trace des enrichissements."""
 
 import json
-import hashlib
 from datetime import datetime, timezone
 import re
 import unicodedata
@@ -39,31 +38,26 @@ def build_name_index(showdown):
 
 
 def match_form(name, direct, aliases, config):
-    """Chercher une identité ou une représentation cosmétique explicitement décrite."""
-    reason = "nom_direct"
-    detail = "Identifiant ou nom Showdown, après normalisation."
-    search_name = name
+    """Chercher le nom exact, un alias déclaré ou une représentation cosmétique."""
     if name in config["alias_formes"]:
-        return config["alias_formes"][name], "alias_configure", config["motif_alias"]
-    if name.startswith("alcremie-") and name.endswith("-sweet"):
-        # Exemple : alcremie-ruby-cream-berry-sweet -> alcremie-ruby-cream.
-        search_name = name.rsplit("-", 2)[0]
-        reason, detail = "representation_cosmetique", config["motif_charmilly"]
+        return config["alias_formes"][name], "alias_configure"
     if name.startswith("minior-") and name.endswith("-meteor"):
-        return "miniormeteor", "representation_cosmetique", config["motif_minior"]
-
-    normalized = normalize_name(search_name)
-    candidates = direct.get(normalized, set())
+        return "miniormeteor", "representation_cosmetique"
+    method = "nom_direct"
+    if name.startswith("alcremie-") and name.endswith("-sweet"):
+        name = name.rsplit("-", 2)[0]  # Enlever seulement la sucrerie.
+        method = "representation_cosmetique"
+    name = normalize_name(name)
+    candidates = direct.get(name, set())
     if not candidates:
-        candidates = aliases.get(normalized, set())
-        if candidates and reason == "nom_direct":
-            reason = "alias_declare_showdown"
-            detail = "Nom déclaré dans baseForme ou cosmeticFormes."
+        candidates = aliases.get(name, set())
+        if candidates and method == "nom_direct":
+            method = "alias_declare_showdown"
     if len(candidates) == 1:
-        return next(iter(candidates)), reason, detail
+        return sorted(candidates)[0], method
     if len(candidates) > 1:
-        return None, "ambigu", "Plusieurs fiches portent ce nom normalisé."
-    return None, "non_apparie", "Aucune correspondance de nom établie ; pas de repli sur l'espèce."
+        return None, "ambigu"
+    return None, "non_apparie"
 
 
 def resolve_tier(key, showdown):
@@ -98,24 +92,21 @@ def prepare_database(pokeapi, showdown, source="csv"):
     """Enrichir la table commune CSV ou API ; ne pas lire l'autre collecte en secours."""
     assert source in ["csv", "api"], "Source attendue : csv ou api."
     config = read_preparation_config()
-    forms = normalize_pokeapi_table(pokeapi).rename(columns={
-        "forme": "form_name", "generation": "form_generation", "genre_en": "genus"})
+    forms = normalize_pokeapi_table(pokeapi)
     direct, aliases = build_name_index(showdown)
     assert set(config["alias_formes"].values()) <= set(showdown), "Alias Showdown absent."
 
-    # Ces tags décrivent l'espèce : on conserve les preuves positives, même si
-    # une forme n'a pas de fiche Showdown. Une absence de tag ne signifie pas « ordinaire ».
+    # Les tags décrivent l'espèce, même lorsqu'une forme n'a pas de fiche Showdown.
     tags_by_species = {}
-    for key, entry in showdown.items():
-        number = entry.get("num")
-        if number is not None and number > 0:
-            for tag in ["Paradox", "Ultra Beast"]:
-                if tag in entry.get("tags", []):
-                    tags_by_species.setdefault(number, {}).setdefault(tag, []).append(key)
+    for entry in showdown.values():
+        number = entry.get("num", 0)
+        if number > 0:
+            tags_by_species.setdefault(number, set()).update(entry.get("tags", []))
 
+    # 1. Trouver la fiche Showdown, puis comparer les données sans les remplacer.
     audit_rows = []
     for _, form in forms.iterrows():
-        key, method, detail = match_form(form["form_name"], direct, aliases, config)
+        key, method = match_form(form["forme"], direct, aliases, config)
         entry = showdown.get(key, {})
         parent_key = normalize_name(entry.get("baseSpecies", ""))
         core_key = parent_key if entry.get("isCosmeticForme") else key
@@ -138,51 +129,43 @@ def prepare_database(pokeapi, showdown, source="csv"):
             sd_types = {config["types_showdown"].get(name) for name in core["types"]}
             types_ok = poke_types == sd_types
 
+        # 2. Ajouter le tier seulement si la fiche appartient à la bonne espèce.
         tier, tier_key, tier_rule = None, None, "sans_correspondance"
         if key and number_ok:
             tier, tier_key, tier_rule = resolve_tier(key, showdown)
 
-        evidence = tags_by_species.get(form["species_id"], {})
-        paradox_genus = pd.notna(form["genus"]) and form["genus"] == "Paradox Pokémon"
-        paradox = paradox_genus or "Paradox" in evidence
-        labels, tag_sources = [], []
+        # 3. Déterminer les catégories à partir des informations de l'espèce.
+        tags = tags_by_species.get(form["species_id"], set())
+        labels = []
         if form["is_legendary"] == 1:
             labels.append("Légendaire")
-            tag_sources.append("pokemon_species.is_legendary")
         if form["is_mythical"] == 1:
             labels.append("Fabuleux")
-            tag_sources.append("pokemon_species.is_mythical")
-        if paradox:
+        paradox = pd.notna(form["genre_en"]) and form["genre_en"] == "Paradox Pokémon"
+        if paradox or "Paradox" in tags:
             labels.append("Paradoxe")
-            if paradox_genus:
-                tag_sources.append("pokemon_species_names.genus (anglais)")
-            if "Paradox" in evidence:
-                tag_sources.append("Showdown: " + ", ".join(evidence["Paradox"]))
-        if "Ultra Beast" in evidence:
+        if "Ultra Beast" in tags:
             labels.append("Ultra-Chimère")
-            tag_sources.append("Showdown: " + ", ".join(evidence["Ultra Beast"]))
         audit_rows.append({
-            "form_id": form["form_id"], "forme": form["form_name"],
-            "source_collecte": source, "source_generation": int(form["version_group_id"]),
+            "form_id": form["form_id"], "forme": form["forme"],
+            "source_collecte": source,
             "source_types": "types résolus de la table commune " + source,
-            "showdown_id": key, "methode_jointure": method, "explication_jointure": detail,
+            "showdown_id": key, "methode_jointure": method,
             "source_stats_showdown": core_key, "espece_concordante": number_ok,
             "stats_concordantes": stats_ok, "stats_divergentes": "; ".join(stat_differences) or None,
             "types_pokeapi": "; ".join(str(form[name]) for name in ["type_1", "type_2"] if pd.notna(form[name])),
             "types_showdown": "; ".join(core.get("types", [])) or None,
             "types_concordants": types_ok, "tier": tier, "source_tier": tier_key,
             "regle_tier": tier_rule, "tag": "; ".join(labels) or "Non étiqueté",
-            "source_tag": "; ".join(tag_sources) or None,
-            "tags_showdown_fiche": "; ".join(entry.get("tags", [])) or None,
         })
     audit = pd.DataFrame(audit_rows)
     for column in ["espece_concordante", "stats_concordantes", "types_concordants"]:
         audit[column] = audit[column].astype("boolean")
 
-    columns = ["form_id", "pokemon_id", "species_id", "nom_fr", "form_name", "form_generation"]
+    # 4. Garder les variables finales et calculer le BST.
+    columns = ["form_id", "pokemon_id", "species_id", "nom_fr", "forme", "generation"]
     columns += STAT_COLUMNS + ["type_1", "type_2", "is_default_form", "is_battle_only", "is_mega"]
-    base = forms[columns].rename(columns={
-        "form_name": "forme", "form_generation": "generation", **dict(zip(STAT_COLUMNS, FINAL_STATS))})
+    base = forms[columns].rename(columns=dict(zip(STAT_COLUMNS, FINAL_STATS)))
     base["bst"] = base[FINAL_STATS].sum(axis=1)
     base = base.merge(audit[["form_id", "tag", "tier"]], on="form_id", how="left", validate="one_to_one")
     # Une divergence est visible dans l'audit ; elle ne remplace jamais les valeurs PokéAPI.
@@ -228,9 +211,9 @@ def summarize_database(base, audit):
 
 
 def export_database(base, audit, pokeapi):
-    """Vérifier puis exporter la base, l'audit et leur provenance."""
+    """Exporter la base vérifiée, les contrôles de fusion et les sources utilisées."""
     validate_database(base, audit, pokeapi)
-    matched = audit.loc[audit["showdown_id"].notna()]
+    matched = audit[audit["showdown_id"].notna()]
     checks = ["espece_concordante", "stats_concordantes", "types_concordants"]
     assert matched[checks].fillna(False).all().all(), "Rapprochement divergent ou non vérifiable : examiner l'audit avant l'export."
     assert audit["source_collecte"].nunique() == 1, "Plusieurs collectes mélangées."
@@ -239,19 +222,14 @@ def export_database(base, audit, pokeapi):
     folder.mkdir(parents=True, exist_ok=True)
     base.to_csv(folder / "pokemon_forms.csv", index=False, encoding="utf-8-sig")
     audit.to_csv(folder / "audit_preparation.csv", index=False, encoding="utf-8-sig")
-
-    # Empreintes pour retrouver les sources et les règles ayant produit ces sorties.
     source = audit["source_collecte"].iloc[0]
-    paths = [PROJECT_DIR / "config/sources.json", PROJECT_DIR / "config/preparation.json",
-             PROJECT_DIR / "src/collect.py", PROJECT_DIR / "src/preparation.py",
-             PROJECT_DIR / "data/raw" / config["snapshot_id"] / "manifest.json"]
-    if source == "api":
-        paths.append(PROJECT_DIR / "data/raw" / config["pokeapi_api"]["snapshot_id"] / "manifest.json")
-    paths += [folder / "pokemon_forms.csv", folder / "audit_preparation.csv"]
-    fingerprints = {path.relative_to(PROJECT_DIR).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
-    provenance = {"exported_at_utc": datetime.now(timezone.utc).isoformat(), "source_pokeapi": source,
-                  "snapshot_pokeapi": config["snapshot_id"] if source == "csv" else config["pokeapi_api"]["snapshot_id"],
-                  "snapshot_showdown": config["snapshot_id"], "formes": len(base),
-                  "colonnes": list(base.columns), "sha256": fingerprints}
-    (folder / "provenance.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    provenance = {
+        "exported_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source_pokeapi": source,
+        "snapshot_pokeapi": config["snapshot_id"] if source == "csv" else config["pokeapi_api"]["snapshot_id"],
+        "snapshot_showdown": config["snapshot_id"],
+        "formes": len(base), "colonnes": list(base.columns),
+        "regles_preparation": read_preparation_config(),
+    }
+    (folder / "provenance.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2), encoding="utf-8")
     return folder
