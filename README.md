@@ -64,19 +64,3 @@ Les deux collectes produisent **27 colonnes communes**. Showdown ne fait pas par
 L'audit contient les correspondances, les contrôles d'espèce, de statistiques et de types, ainsi que l'origine des tiers. La provenance conserve la date d'export, les instantanés utilisés et une copie des règles de préparation. Les empreintes restent utilisées pour protéger les fichiers bruts et le cache API ; elles ne sont plus recalculées pour tous les scripts à chaque export.
 
 Pour actualiser les sources, choisir de nouveaux noms d'instantanés dans la configuration. Ne pas mélanger les anciennes réponses et de nouveaux téléchargements dans un instantané déjà complet.
-
-## Vérifier le projet
-
-Depuis la racine du dépôt, avec les sources locales présentes :
-
-```bat
-python -m unittest discover -s tests -v
-```
-
-Pour lancer seulement la collecte API :
-
-```bat
-python importation.py
-```
-
-Pour la vérification complète, redémarrer le noyau puis exécuter tout le notebook final. La préparation s'arrête si une correspondance Showdown est divergente ou non vérifiable.
